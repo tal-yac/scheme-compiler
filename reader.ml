@@ -7,6 +7,12 @@ let rec is_member a = function
   | [] -> false
   | a' :: s -> (a = a') || (is_member a s);;
 
+let make_digits make digits base =
+  let offset = if (base > 10) 
+                then int_of_char 'a' - 10 
+                else int_of_char '0' in
+  make digits (fun digit -> int_of_char digit - offset);;
+
 let rec gcd a b =
   match (a, b) with
   | (0, b) -> b
@@ -61,8 +67,17 @@ module Reader : READER = struct
     let nt1 = caten nt1 nt_end_of_line_or_file in
     let nt1 = unitify nt1 in
     nt1 str
-  and nt_paired_comment str = raise X_not_yet_implemented
-  and nt_sexpr_comment str = raise X_not_yet_implemented
+  and nt_paired_comment str =
+    let nt1 = word "#;" in
+    let nt1 = unitify (caten nt1 nt_sexpr) in
+    nt1 str
+  and nt_sexpr_comment str =
+    let prefix = char '{' in
+    let cmnt = star nt_sexpr in
+    let postfix = char '}' in
+    let nt1 = caten prefix (caten cmnt postfix) in
+    let nt1 = unitify nt1 in
+    nt1 str
   and nt_comment str =
     disj_list
       [nt_line_comment;
@@ -81,9 +96,29 @@ module Reader : READER = struct
     let nt1 = caten nt_skip_star (caten nt nt_skip_star) in
     let nt1 = pack nt1 (fun (_, (e, _)) -> e) in
     nt1
-  and nt_digit str = raise X_not_yet_implemented
-  and nt_hex_digit str = raise X_not_yet_implemented
-  and nt_nat str = raise X_not_yet_implemented
+  and make_list_skipped_star (nt : 'b parser) =
+    let nt1 = caten nt_skip_star (caten nt nt_skip_star) in
+    let nt1 = pack nt1 (fun (_, (e, _)) -> e) in
+    nt1
+  and nt_digit str =
+     let nt1 = range '0' '9' in
+     let nt1 = make_digits pack nt1 10 in
+    nt1 str
+  and nt_hex_digit str = 
+    let hex_digits = range_ci 'a' 'f' in
+    let hex_digits = make_digits pack hex_digits 16 in
+    let nt1 = disj nt_digit hex_digits in
+    nt1 str
+  and nt_nat str =
+    let nt1 = plus nt_digit in
+    let nt1 = pack nt1
+                (fun digits ->
+                  List.fold_left
+                    (fun num digit ->
+                      10 * num + digit)
+                    0
+                    digits) in
+    nt1 str
   and nt_hex_nat str = 
     let nt1 = plus nt_hex_digit in
     let nt1 = pack nt1
@@ -94,7 +129,14 @@ module Reader : READER = struct
                     0
                     digits) in
     nt1 str
-  and nt_optional_sign str = raise X_not_yet_implemented
+  and nt_optional_sign str = (* raise X_not_yet_implemented *)
+    let optional_signs = disj (char '+') (char '-') in
+    let optional_signs = maybe optional_signs in 
+    let optional_signs = pack optional_signs (fun n ->
+      match n with
+      | Some '-' -> false
+      | _ -> true ) in
+    optional_signs str
   and nt_int str =
     let nt1 = caten nt_optional_sign nt_nat in
     let nt1 = pack nt1
@@ -147,7 +189,33 @@ module Reader : READER = struct
       (function
        | None -> none_value
        | Some(x) -> x)
-  and nt_float str = raise X_not_yet_implemented
+  and nt_float str = (* raise X_not_yet_implemented *)
+    let nt1 = disj_list [nt_floatA; nt_floatB; nt_floatC] in
+    let nt1 = caten nt_optional_sign nt1 in
+    let nt1 = pack nt1
+                (fun (is_positive, f) ->
+                  ScmReal (if is_positive then f else -.f)) in
+    nt1 str
+  and nt_floatA str =
+    let nt1 = word "." in
+    let maybe_mantissa = make_maybe nt_mantissa 0.0 in
+    let maybe_exponent = make_maybe nt_exponent 1.0 in
+    let nt1 = caten nt_integer_part
+                    (caten nt1
+                      (caten maybe_mantissa maybe_exponent)) in
+    let nt1 = pack nt1 (fun (n, (_, (m, e))) -> (n +. m) *. e) in
+    nt1 str
+  and nt_floatB str =
+    let nt1 = word "." in
+    let mantissa = nt_mantissa in
+    let maybe_exponent = make_maybe nt_exponent 1.0 in
+    let nt1 = caten nt1 (caten mantissa maybe_exponent) in
+    let nt1 = pack nt1 (fun (_, (m, e)) -> m *. e) in
+    nt1 str
+  and nt_floatC str =
+    let nt1 = caten nt_integer_part nt_exponent in
+    let nt1 = pack nt1 (fun (n, e) -> n *. e) in
+    nt1 str
   and nt_number str =
     let nt1 = nt_float in
     let nt2 = nt_frac in
@@ -172,13 +240,23 @@ module Reader : READER = struct
     let nt1 = const(fun ch -> ' ' < ch) in
     let nt1 = not_followed_by nt1 nt_symbol_char in
     nt1 str
-  and nt_char_named str = raise X_not_yet_implemented
+  and make_named_char char_name ch =
+    let nt1 = word_ci char_name in
+    let nt1 = pack nt1 (fun s -> ch) in
+    nt1
+  and nt_char_named str =
+    disj_list [(make_named_char "nul" '\x00');
+              (make_named_char "space" ' ');
+              (make_named_char "tab" '\t');
+              (make_named_char "newline" '\n');
+              (make_named_char "return" '\r');
+              (make_named_char "page" '\012')] str
   and nt_char_hex str =
     let nt1 = caten (char_ci 'x') nt_hex_nat in
     let nt1 = pack nt1 (fun (_, n) -> n) in
     let nt1 = only_if nt1 (fun n -> n < 256) in
     let nt1 = pack nt1 (fun n -> char_of_int n) in
-    nt1 str  
+    nt1 str
   and nt_char str =
     let nt1 = word "#\\" in
     let nt2 = disj nt_char_simple (disj nt_char_named nt_char_hex) in
@@ -192,7 +270,12 @@ module Reader : READER = struct
     let nt3 = one_of "!$^*_-+=<>?/" in
     let nt1 = disj nt1 (disj nt2 nt3) in
     nt1 str
-  and nt_symbol str = raise X_not_yet_implemented
+  and nt_symbol str =
+    let nt1 = plus nt_symbol_char in
+    let nt1 = pack nt1 string_of_list in
+    let nt1 = pack nt1 (fun sym_name -> ScmSymbol sym_name) in
+    let nt1 = diff nt1 nt_number in
+    nt1 str
   and nt_string_part_simple str =
     let nt1 =
       disj_list [unitify (char '"'); unitify (char '\\'); unitify (word "~~");
@@ -218,7 +301,16 @@ module Reader : READER = struct
     let nt1 = pack nt1 (fun (_, (n, _)) -> n) in
     let nt1 = pack nt1 char_of_int in
     nt1 str
-  and nt_string_part_dynamic str = raise X_not_yet_implemented
+  and nt_string_part_dynamic str =
+    let prefix = word "~{" in
+    let postfix = char '}' in
+    let nt1 = caten prefix (caten nt_sexpr postfix) in
+    let nt1 = pack nt1 (fun (_, (sexpr, _)) -> Dynamic (ScmPair(
+                                                        ScmSymbol("format"),
+                                                        ScmPair(
+                                                          ScmString("~a"),
+                                                          ScmPair(sexpr, ScmNil))))) in
+    nt1 str
   and nt_string_part_static str =
     let nt1 = disj_list [nt_string_part_simple;
                          nt_string_part_meta;
@@ -253,8 +345,39 @@ module Reader : READER = struct
                          ScmNil in
                      ScmPair(ScmSymbol "string-append", argl)) in
     nt1 str
-  and nt_vector str = raise X_not_yet_implemented
-  and nt_list str = raise X_not_yet_implemented
+  and nt_vector str =
+    let vec_begin = word "#(" in
+    let vec_end = char ')' in
+    let vec = star nt_sexpr in
+    let vec = make_list_skipped_star vec in
+    let vec = caten vec_begin (caten vec vec_end) in
+    let vec = pack vec (fun (_, (elems, _)) ->
+                            ScmVector elems) in
+    vec str
+  and nt_list str =
+    let prefix = char '(' in
+    let postfix = char ')' in
+    let empty_list = caten nt_skip_star postfix in
+    let empty_list = pack empty_list (fun _ -> ScmNil) in
+    let list = plus nt_sexpr in
+    let list = make_list_skipped_star list in
+    let proper = pack postfix (fun _ -> ScmNil) in
+    let improper = caten nt_improper postfix in
+    let improper = pack improper (fun ((_, sexpr), _) -> sexpr) in
+    let list = caten list (disj proper improper) in
+    let list = pack list (fun (l, e) ->
+                        List.fold_right(fun car cdr ->
+                          ScmPair(car, cdr))
+                        l e) in
+    let list = disj empty_list list in
+    let list = caten prefix list in
+    let list = pack list (fun (_, l) -> l) in
+    list str
+  and nt_improper str =
+    let improper_char = char '.' in
+    let improper = make_skipped_star nt_sexpr in
+    let improper = caten improper_char improper in
+    improper str
   and make_quoted_form nt_qf qf_name =
     let nt1 = caten nt_qf nt_sexpr in
     let nt1 = pack nt1

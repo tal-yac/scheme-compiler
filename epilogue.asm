@@ -3,7 +3,9 @@
         mov rsi, qword [top_of_memory]
         sub rsi, memory
         mov rax, 0
+	ENTER
         call printf
+	LEAVE
 	leave
 	ret
 
@@ -11,7 +13,9 @@ L_error_non_closure:
         mov rdi, qword [stderr]
         mov rsi, fmt_non_closure
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -2
         call exit
 
@@ -19,7 +23,9 @@ L_error_improper_list:
 	mov rdi, qword [stderr]
 	mov rsi, fmt_error_improper_list
 	mov rax, 0
+	ENTER
 	call fprintf
+	LEAVE
 	mov rax, -7
 	call exit
 
@@ -34,7 +40,9 @@ L_error_incorrect_arity_common:
         pop rdx
         pop rcx
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -6
         call exit
 
@@ -320,19 +328,25 @@ print_sexpr:
 	push rdi
 	mov rdi, fmt_dotted_pair
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	pop rdi
 	call print_sexpr
 	mov rdi, fmt_rparen
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	LEAVE
 	ret
 
 .Lcdr_nil:
 	mov rdi, fmt_rparen
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	LEAVE
 	ret
 
@@ -340,7 +354,9 @@ print_sexpr:
 	push rdi
 	mov rdi, fmt_space
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	mov rdi, qword [rsp]
 	mov rdi, SOB_PAIR_CAR(rdi)
 	call print_sexpr
@@ -355,7 +371,9 @@ print_sexpr:
 	push rdi
 	mov rdi, fmt_vector
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	mov rdi, qword [rsp]
 	push qword [rdi + 1]
 	push 1
@@ -370,7 +388,9 @@ print_sexpr:
 	je .Lvector_end
 	mov rdi, fmt_space
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	mov rax, qword [rsp]
 	mov rbx, qword [rsp + 8*2]
 	mov rdi, qword [rbx + 1 + 8 + 8 * rax] ; v[i]
@@ -517,13 +537,17 @@ print_sexpr:
 	mov rcx, rdi
 	mov rdi, qword [stderr]
 	mov rax, 0
+	ENTER
 	call fprintf
+	LEAVE
 	mov rax, -1
 	call exit
 
 .Lemit:
 	mov rax, 0
+	ENTER
 	call printf
+	LEAVE
 	jmp .Lend
 
 .Lend:
@@ -781,7 +805,9 @@ L_code_ptr_write_char:
         mov rdi, fmt_char
         mov rsi, rax
         mov rax, 0
+	ENTER
         call printf
+	LEAVE
         mov rax, sob_void
         LEAVE
         ret AND_KILL_FRAME(1)
@@ -1182,12 +1208,16 @@ L_code_ptr_error:
         assert_string(rsi)
         mov rdi, fmt_scheme_error_part_1
         mov rax, 0
+	ENTER
         call printf
+	LEAVE
         mov rdi, PARAM(0)
         call print_sexpr
         mov rdi, fmt_scheme_error_part_2
         mov rax, 0
+	ENTER
         call printf
+	LEAVE
         mov rax, PARAM(1)       ; sob_string
         mov rsi, 1              ; size = 1 byte
         mov rdx, qword [rax + 1] ; length
@@ -1196,7 +1226,9 @@ L_code_ptr_error:
         call fwrite
         mov rdi, fmt_scheme_error_part_3
         mov rax, 0
+	ENTER
         call printf
+	LEAVE
         mov rax, -9
         call exit
 
@@ -1234,7 +1266,7 @@ L_code_ptr_raw_less_than_qq:
         mov rcx, rax
         mov rax, qword [rdi + 1 + 8] ; den1
         cqo
-        imul qword [rdi + 1]          ; num2
+        imul qword [rsi + 1]          ; num2
         sub rcx, rax
         jge .L_false
         mov rax, sob_boolean_true
@@ -1582,7 +1614,9 @@ L_error_integer_range:
         mov rdi, qword [stderr]
         mov rsi, fmt_integer_range
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -5
         call exit
 
@@ -1591,7 +1625,9 @@ L_error_arg_count_0:
         mov rsi, fmt_arg_count_0
         mov rdx, COUNT
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -3
         call exit
 
@@ -1600,7 +1636,9 @@ L_error_arg_count_1:
         mov rsi, fmt_arg_count_1
         mov rdx, COUNT
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -3
         call exit
 
@@ -1609,7 +1647,9 @@ L_error_arg_count_2:
         mov rsi, fmt_arg_count_2
         mov rdx, COUNT
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -3
         call exit
 
@@ -1618,7 +1658,9 @@ L_error_arg_count_12:
         mov rsi, fmt_arg_count_12
         mov rdx, COUNT
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -3
         call exit
 
@@ -1627,7 +1669,9 @@ L_error_arg_count_3:
         mov rsi, fmt_arg_count_3
         mov rdx, COUNT
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -3
         call exit
         
@@ -1635,7 +1679,9 @@ L_error_incorrect_type:
         mov rdi, qword [stderr]
         mov rsi, fmt_type
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -4
         call exit
 
@@ -1643,7 +1689,9 @@ L_error_division_by_zero:
         mov rdi, qword [stderr]
         mov rsi, fmt_division_by_zero
         mov rax, 0
+	ENTER
         call fprintf
+	LEAVE
         mov rax, -8
         call exit
 

@@ -1264,9 +1264,9 @@ L_code_ptr_raw_less_than_qq:
         cqo
         imul qword [rdi + 1 + 8] ; den2
         mov rcx, rax
-        mov rax, qword [rdi + 1 + 8] ; den1
+        mov rax, qword [rsi + 1 + 8] ; den1
         cqo
-        imul qword [rsi + 1]          ; num2
+        imul qword [rdi + 1]          ; num2
         sub rcx, rax
         jge .L_false
         mov rax, sob_boolean_true

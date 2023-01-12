@@ -1,6 +1,6 @@
 #use "pc.ml";;
 
-exception X_not_yet_implemented;;
+exception X_not_yet_implemented of string;;
 exception X_this_should_not_happen of string;;
 
 let rec is_member a = function
@@ -34,21 +34,16 @@ type sexpr =
   | ScmVector of (sexpr list)
   | ScmPair of (sexpr * sexpr);;
 
+  type string_part =
+  | Static of string
+  | Dynamic of sexpr;;
+
 module type READER = sig
   val nt_sexpr : sexpr PC.parser
-  val print_sexpr : out_channel -> sexpr -> unit
-  val print_sexprs : out_channel -> sexpr list -> unit
-  val sprint_sexpr : 'a -> sexpr -> string
-  val sprint_sexprs : 'a -> sexpr list -> string
-  val scheme_sexpr_list_of_sexpr_list : sexpr list -> sexpr
 end;; (* end of READER signature *)
 
 module Reader : READER = struct
   open PC;;
-
-  type string_part =
-    | Static of string
-    | Dynamic of sexpr;;
 
   let unitify nt = pack nt (fun _ -> ());;
 
@@ -401,89 +396,90 @@ module Reader : READER = struct
     let nt1 = make_skipped_star nt1 in
     nt1 str;;
 
-  let rec string_of_sexpr = function
-    | ScmVoid -> "#<void>"
-    | ScmNil -> "()"
-    | ScmBoolean(false) -> "#f"
-    | ScmBoolean(true) -> "#t"
-    | ScmChar('\n') -> "#\\newline"
-    | ScmChar('\r') -> "#\\return"
-    | ScmChar('\012') -> "#\\page"
-    | ScmChar('\t') -> "#\\tab"
-    | ScmChar(' ') -> "#\\space"
-    | ScmChar(ch) ->
-       if (ch < ' ')
-       then let n = int_of_char ch in
-            Printf.sprintf "#\\x%x" n
-       else Printf.sprintf "#\\%c" ch
-    | ScmString(str) ->
-       Printf.sprintf "\"%s\""
-         (String.concat ""
-            (List.map
-               (function
-                | '\n' -> "\\n"
-                | '\012' -> "\\f"
-                | '\r' -> "\\r"
-                | '\t' -> "\\t"
-                | '\"' -> "\\\""
-                | ch ->
-                   if (ch < ' ')
-                   then Printf.sprintf "\\x%x;" (int_of_char ch)
-                   else Printf.sprintf "%c" ch)
-               (list_of_string str)))
-    | ScmSymbol(sym) -> sym
-    | ScmNumber(ScmRational(0, _)) -> "0"
-    | ScmNumber(ScmRational(num, 1)) -> Printf.sprintf "%d" num
-    | ScmNumber(ScmRational(num, -1)) -> Printf.sprintf "%d" (- num)
-    | ScmNumber(ScmRational(num, den)) -> Printf.sprintf "%d/%d" num den
-    | ScmNumber(ScmReal(x)) -> Printf.sprintf "%f" x
-    | ScmVector(sexprs) ->
-       let strings = List.map string_of_sexpr sexprs in
-       let inner_string = String.concat " " strings in
-       Printf.sprintf "#(%s)" inner_string
-    | ScmPair(ScmSymbol "quote",
-              ScmPair(sexpr, ScmNil)) ->
-       Printf.sprintf "'%s" (string_of_sexpr sexpr)
-    | ScmPair(ScmSymbol "quasiquote",
-              ScmPair(sexpr, ScmNil)) ->
-       Printf.sprintf "`%s" (string_of_sexpr sexpr)
-    | ScmPair(ScmSymbol "unquote",
-              ScmPair(sexpr, ScmNil)) ->
-       Printf.sprintf ",%s" (string_of_sexpr sexpr)
-    | ScmPair(ScmSymbol "unquote-splicing",
-              ScmPair(sexpr, ScmNil)) ->
-       Printf.sprintf ",@%s" (string_of_sexpr sexpr)
-    | ScmPair(car, cdr) ->
-       string_of_sexpr' (string_of_sexpr car) cdr
-  and string_of_sexpr' car_string = function
-    | ScmNil -> Printf.sprintf "(%s)" car_string
-    | ScmPair(cadr, cddr) ->
-       let new_car_string =
-         Printf.sprintf "%s %s" car_string (string_of_sexpr cadr) in
-       string_of_sexpr' new_car_string cddr
-    | cdr ->
-       let cdr_string = (string_of_sexpr cdr) in
-       Printf.sprintf "(%s . %s)" car_string cdr_string;;
+    
+  end;; (* end of struct Reader *)
 
-  let print_sexpr chan sexpr = output_string chan (string_of_sexpr sexpr);;
+let scheme_sexpr_list_of_sexpr_list sexprs =
+  List.fold_right (fun car cdr -> ScmPair (car, cdr)) sexprs ScmNil;;
 
-  let print_sexprs chan sexprs =
-    output_string chan
-      (Printf.sprintf "[%s]"
-         (String.concat "; "
-            (List.map string_of_sexpr sexprs)));;
+let rec string_of_sexpr = function
+| ScmVoid -> "#<void>"
+| ScmNil -> "()"
+| ScmBoolean(false) -> "#f"
+| ScmBoolean(true) -> "#t"
+| ScmChar('\n') -> "#\\newline"
+| ScmChar('\r') -> "#\\return"
+| ScmChar('\012') -> "#\\page"
+| ScmChar('\t') -> "#\\tab"
+| ScmChar(' ') -> "#\\space"
+| ScmChar(ch) ->
+   if (ch < ' ')
+   then let n = int_of_char ch in
+        Printf.sprintf "#\\x%x" n
+   else Printf.sprintf "#\\%c" ch
+| ScmString(str) ->
+   Printf.sprintf "\"%s\""
+     (String.concat ""
+        (List.map
+           (function
+            | '\n' -> "\\n"
+            | '\012' -> "\\f"
+            | '\r' -> "\\r"
+            | '\t' -> "\\t"
+            | '\"' -> "\\\""
+            | ch ->
+               if (ch < ' ')
+               then Printf.sprintf "\\x%x;" (int_of_char ch)
+               else Printf.sprintf "%c" ch)
+           (list_of_string str)))
+| ScmSymbol(sym) -> sym
+| ScmNumber(ScmRational(0, _)) -> "0"
+| ScmNumber(ScmRational(num, 1)) -> Printf.sprintf "%d" num
+| ScmNumber(ScmRational(num, -1)) -> Printf.sprintf "%d" (- num)
+| ScmNumber(ScmRational(num, den)) -> Printf.sprintf "%d/%d" num den
+| ScmNumber(ScmReal(x)) -> Printf.sprintf "%f" x
+| ScmVector(sexprs) ->
+   let strings = List.map string_of_sexpr sexprs in
+   let inner_string = String.concat " " strings in
+   Printf.sprintf "#(%s)" inner_string
+| ScmPair(ScmSymbol "quote",
+          ScmPair(sexpr, ScmNil)) ->
+   Printf.sprintf "'%s" (string_of_sexpr sexpr)
+| ScmPair(ScmSymbol "quasiquote",
+          ScmPair(sexpr, ScmNil)) ->
+   Printf.sprintf "`%s" (string_of_sexpr sexpr)
+| ScmPair(ScmSymbol "unquote",
+          ScmPair(sexpr, ScmNil)) ->
+   Printf.sprintf ",%s" (string_of_sexpr sexpr)
+| ScmPair(ScmSymbol "unquote-splicing",
+          ScmPair(sexpr, ScmNil)) ->
+   Printf.sprintf ",@%s" (string_of_sexpr sexpr)
+| ScmPair(car, cdr) ->
+   string_of_sexpr' (string_of_sexpr car) cdr
+and string_of_sexpr' car_string = function
+| ScmNil -> Printf.sprintf "(%s)" car_string
+| ScmPair(cadr, cddr) ->
+   let new_car_string =
+     Printf.sprintf "%s %s" car_string (string_of_sexpr cadr) in
+   string_of_sexpr' new_car_string cddr
+| cdr ->
+   let cdr_string = (string_of_sexpr cdr) in
+   Printf.sprintf "(%s . %s)" car_string cdr_string;;
 
-  let sprint_sexpr _ sexpr = string_of_sexpr sexpr;;
+let print_sexpr chan sexpr = output_string chan (string_of_sexpr sexpr);;
 
-  let sprint_sexprs chan sexprs =
-    Printf.sprintf "[%s]"
-      (String.concat "; "
-         (List.map string_of_sexpr sexprs));;
+let print_sexprs chan sexprs =
+output_string chan
+  (Printf.sprintf "[%s]"
+     (String.concat "; "
+        (List.map string_of_sexpr sexprs)));;
 
-  let scheme_sexpr_list_of_sexpr_list sexprs =
-    List.fold_right (fun car cdr -> ScmPair (car, cdr)) sexprs ScmNil;;
+let sprint_sexpr _ sexpr = string_of_sexpr sexpr;;
 
-end;; (* end of struct Reader *)
+let sprint_sexprs chan sexprs =
+Printf.sprintf "[%s]"
+  (String.concat "; "
+     (List.map string_of_sexpr sexprs));;
 
 (* the tag-parser *)
 
@@ -509,10 +505,6 @@ type expr =
 
 module type TAG_PARSER = sig
   val tag_parse : sexpr -> expr
-  val print_expr : out_channel -> expr -> unit
-  val print_exprs : out_channel -> expr list -> unit
-  val sprint_expr : 'a -> expr -> string
-  val sprint_exprs : 'a -> expr list -> string    
 end;;
 
 module Tag_Parser : TAG_PARSER = struct
@@ -817,121 +809,120 @@ module Tag_Parser : TAG_PARSER = struct
         | args, ScmNil ->
            ScmApplic (tag_parse proc, List.map tag_parse args)
         | _ -> raise (X_syntax "malformed application"))
-    | sexpr -> raise (X_syntax
-                       (Printf.sprintf
-                          "Unknown form: \n%a\n"
-                          Reader.sprint_sexpr sexpr));;
+    | _ -> let _ = Printf.printf "%s" (Printf.sprintf
+    "Unknown form: %a\n"
+    sprint_sexpr sexpr) in
+      raise (X_syntax "x");;
 
-                          let rec sexpr_of_expr = function
-                          | ScmConst(ScmVoid) -> ScmVoid
-                          | ScmConst((ScmBoolean _) as sexpr) -> sexpr
-                          | ScmConst((ScmChar _) as sexpr) -> sexpr
-                          | ScmConst((ScmString _) as sexpr) -> sexpr
-                          | ScmConst((ScmNumber _) as sexpr) -> sexpr
-                          | ScmConst((ScmSymbol _) as sexpr)
-                            | ScmConst(ScmNil as sexpr)
-                            | ScmConst(ScmPair _ as sexpr)
-                            | ScmConst((ScmVector _) as sexpr) ->
-                             ScmPair (ScmSymbol "quote", ScmPair (sexpr, ScmNil))
-                          | ScmVarGet(Var var) -> ScmSymbol var
-                          | ScmIf(test, dit, ScmConst ScmVoid) ->
-                             let test = sexpr_of_expr test in
-                             let dit = sexpr_of_expr dit in
-                             ScmPair (ScmSymbol "if", ScmPair (test, ScmPair (dit, ScmNil)))
-                          | ScmIf(e1, e2, ScmConst (ScmBoolean false)) ->
-                             let e1 = sexpr_of_expr e1 in
-                             (match (sexpr_of_expr e2) with
-                              | ScmPair (ScmSymbol "and", exprs) ->
-                                 ScmPair (ScmSymbol "and", ScmPair(e1, exprs))
-                              | e2 -> ScmPair (ScmSymbol "and", ScmPair (e1, ScmPair (e2, ScmNil))))
-                          | ScmIf(test, dit, dif) ->
-                             let test = sexpr_of_expr test in
-                             let dit = sexpr_of_expr dit in
-                             let dif = sexpr_of_expr dif in
-                             ScmPair
-                               (ScmSymbol "if", ScmPair (test, ScmPair (dit, ScmPair (dif, ScmNil))))
-                          | ScmSeq([]) -> ScmVoid
-                          | ScmSeq([expr]) -> sexpr_of_expr expr
-                          | ScmSeq(exprs) ->
-                             ScmPair(ScmSymbol "begin", 
-                                     scheme_sexpr_list_of_sexpr_list
-                                       (List.map sexpr_of_expr exprs))
-                          | ScmOr([]) -> ScmBoolean false
-                          | ScmOr([expr]) -> sexpr_of_expr expr
-                          | ScmOr(exprs) -> ScmPair(ScmSymbol "or", 
-                                                  scheme_sexpr_list_of_sexpr_list
-                                                    (List.map sexpr_of_expr exprs))
-                          | ScmVarSet(Var var, expr) ->
-                             let var = ScmSymbol var in
-                             let expr = sexpr_of_expr expr in
-                             ScmPair (ScmSymbol "set!", ScmPair (var, ScmPair (expr, ScmNil)))
-                          | ScmVarDef(Var var, expr) ->
-                             let var = ScmSymbol var in
-                             let expr = sexpr_of_expr expr in
-                             ScmPair (ScmSymbol "define", ScmPair (var, ScmPair (expr, ScmNil)))
-                          | ScmLambda(params, Simple, expr) ->
-                             let params = scheme_sexpr_list_of_sexpr_list
-                                            (List.map (fun str -> ScmSymbol str) params) in
-                             let expr = sexpr_of_expr expr in
-                             ScmPair (ScmSymbol "lambda",
-                                      ScmPair (params,
-                                               ScmPair (expr, ScmNil)))
-                          | ScmLambda([], Opt opt, expr) ->
-                             let expr = sexpr_of_expr expr in
-                             let opt = ScmSymbol opt in
-                             ScmPair
-                               (ScmSymbol "lambda",
-                                ScmPair (opt, ScmPair (expr, ScmNil)))
-                          | ScmLambda(params, Opt opt, expr) ->
-                             let expr = sexpr_of_expr expr in
-                             let opt = ScmSymbol opt in
-                             let params = List.fold_right
-                                            (fun param sexpr -> ScmPair(ScmSymbol param, sexpr))
-                                            params
-                                            opt in
-                             ScmPair
-                               (ScmSymbol "lambda", ScmPair (params, ScmPair (expr, ScmNil)))
-                          | ScmApplic (ScmLambda (params, Simple, expr), args) ->
-                             let ribs =
-                               scheme_sexpr_list_of_sexpr_list
-                                 (List.map2
-                                    (fun param arg -> ScmPair (ScmSymbol param, ScmPair (arg, ScmNil)))
-                                    params
-                                    (List.map sexpr_of_expr args)) in
-                             let expr = sexpr_of_expr expr in
-                             ScmPair
-                               (ScmSymbol "let",
-                                ScmPair (ribs,
-                                         ScmPair (expr, ScmNil)))
-                          | ScmApplic (proc, args) ->
-                             let proc = sexpr_of_expr proc in
-                             let args =
-                               scheme_sexpr_list_of_sexpr_list
-                                 (List.map sexpr_of_expr args) in
-                             ScmPair (proc, args)
-                          | _ -> raise (X_syntax "Unknown form");;
-                    
-  let string_of_expr expr =
-    Printf.sprintf "%a" sprint_sexpr (sexpr_of_expr expr);;
+  end;; (* end of struct Tag_Parser *)
 
-  let print_expr chan expr =
-    output_string chan
-      (string_of_expr expr);;
+  let rec sexpr_of_expr = function
+                                                | ScmConst(ScmVoid) -> ScmVoid
+                                                | ScmConst((ScmBoolean _) as sexpr) -> sexpr
+                                                | ScmConst((ScmChar _) as sexpr) -> sexpr
+                                                | ScmConst((ScmString _) as sexpr) -> sexpr
+                                                | ScmConst((ScmNumber _) as sexpr) -> sexpr
+                                                | ScmConst((ScmSymbol _) as sexpr)
+                                                  | ScmConst(ScmNil as sexpr)
+                                                  | ScmConst(ScmPair _ as sexpr)
+                                                  | ScmConst((ScmVector _) as sexpr) ->
+                                                   ScmPair (ScmSymbol "quote", ScmPair (sexpr, ScmNil))
+                                                | ScmVarGet(Var var) -> ScmSymbol var
+                                                | ScmIf(test, dit, ScmConst ScmVoid) ->
+                                                   let test = sexpr_of_expr test in
+                                                   let dit = sexpr_of_expr dit in
+                                                   ScmPair (ScmSymbol "if", ScmPair (test, ScmPair (dit, ScmNil)))
+                                                | ScmIf(e1, e2, ScmConst (ScmBoolean false)) ->
+                                                   let e1 = sexpr_of_expr e1 in
+                                                   (match (sexpr_of_expr e2) with
+                                                    | ScmPair (ScmSymbol "and", exprs) ->
+                                                       ScmPair (ScmSymbol "and", ScmPair(e1, exprs))
+                                                    | e2 -> ScmPair (ScmSymbol "and", ScmPair (e1, ScmPair (e2, ScmNil))))
+                                                | ScmIf(test, dit, dif) ->
+                                                   let test = sexpr_of_expr test in
+                                                   let dit = sexpr_of_expr dit in
+                                                   let dif = sexpr_of_expr dif in
+                                                   ScmPair
+                                                     (ScmSymbol "if", ScmPair (test, ScmPair (dit, ScmPair (dif, ScmNil))))
+                                                | ScmSeq([]) -> ScmVoid
+                                                | ScmSeq([expr]) -> sexpr_of_expr expr
+                                                | ScmSeq(exprs) ->
+                                                   ScmPair(ScmSymbol "begin", 
+                                                           scheme_sexpr_list_of_sexpr_list
+                                                             (List.map sexpr_of_expr exprs))
+                                                | ScmOr([]) -> ScmBoolean false
+                                                | ScmOr([expr]) -> sexpr_of_expr expr
+                                                | ScmOr(exprs) -> ScmPair(ScmSymbol "or", 
+                                                                        scheme_sexpr_list_of_sexpr_list
+                                                                          (List.map sexpr_of_expr exprs))
+                                                | ScmVarSet(Var var, expr) ->
+                                                   let var = ScmSymbol var in
+                                                   let expr = sexpr_of_expr expr in
+                                                   ScmPair (ScmSymbol "set!", ScmPair (var, ScmPair (expr, ScmNil)))
+                                                | ScmVarDef(Var var, expr) ->
+                                                   let var = ScmSymbol var in
+                                                   let expr = sexpr_of_expr expr in
+                                                   ScmPair (ScmSymbol "define", ScmPair (var, ScmPair (expr, ScmNil)))
+                                                | ScmLambda(params, Simple, expr) ->
+                                                   let params = scheme_sexpr_list_of_sexpr_list
+                                                                  (List.map (fun str -> ScmSymbol str) params) in
+                                                   let expr = sexpr_of_expr expr in
+                                                   ScmPair (ScmSymbol "lambda",
+                                                            ScmPair (params,
+                                                                     ScmPair (expr, ScmNil)))
+                                                | ScmLambda([], Opt opt, expr) ->
+                                                   let expr = sexpr_of_expr expr in
+                                                   let opt = ScmSymbol opt in
+                                                   ScmPair
+                                                     (ScmSymbol "lambda",
+                                                      ScmPair (opt, ScmPair (expr, ScmNil)))
+                                                | ScmLambda(params, Opt opt, expr) ->
+                                                   let expr = sexpr_of_expr expr in
+                                                   let opt = ScmSymbol opt in
+                                                   let params = List.fold_right
+                                                                  (fun param sexpr -> ScmPair(ScmSymbol param, sexpr))
+                                                                  params
+                                                                  opt in
+                                                   ScmPair
+                                                     (ScmSymbol "lambda", ScmPair (params, ScmPair (expr, ScmNil)))
+                                                | ScmApplic (ScmLambda (params, Simple, expr), args) ->
+                                                   let ribs =
+                                                     scheme_sexpr_list_of_sexpr_list
+                                                       (List.map2
+                                                          (fun param arg -> ScmPair (ScmSymbol param, ScmPair (arg, ScmNil)))
+                                                          params
+                                                          (List.map sexpr_of_expr args)) in
+                                                   let expr = sexpr_of_expr expr in
+                                                   ScmPair
+                                                     (ScmSymbol "let",
+                                                      ScmPair (ribs,
+                                                               ScmPair (expr, ScmNil)))
+                                                | ScmApplic (proc, args) ->
+                                                   let proc = sexpr_of_expr proc in
+                                                   let args =
+                                                     scheme_sexpr_list_of_sexpr_list
+                                                       (List.map sexpr_of_expr args) in
+                                                   ScmPair (proc, args)
 
-  let print_exprs chan exprs =
-    output_string chan
-      (Printf.sprintf "[%s]"
-         (String.concat "; "
-            (List.map string_of_expr exprs)));;
+let string_of_expr expr =
+  Printf.sprintf "%a" sprint_sexpr (sexpr_of_expr expr);;
 
-  let sprint_expr _ expr = string_of_expr expr;;
+let print_expr chan expr =
+  output_string chan
+    (string_of_expr expr);;
 
-  let sprint_exprs chan exprs =
-    Printf.sprintf "[%s]"
-      (String.concat "; "
-         (List.map string_of_expr exprs));;
+let print_exprs chan exprs =
+  output_string chan
+    (Printf.sprintf "[%s]"
+       (String.concat "; "
+          (List.map string_of_expr exprs)));;
 
-end;; (* end of struct Tag_Parser *)
+let sprint_expr _ expr = string_of_expr expr;;
+
+let sprint_exprs chan exprs =
+  Printf.sprintf "[%s]"
+    (String.concat "; "
+       (List.map string_of_expr exprs));;
 
 type app_kind = Tail_Call | Non_Tail_Call;;
 
@@ -1265,13 +1256,13 @@ let rec sexpr_of_expr' = function
   | ScmSeq' ([expr]) -> sexpr_of_expr' expr
   | ScmSeq' (exprs) ->
      ScmPair (ScmSymbol "begin", 
-              Reader.scheme_sexpr_list_of_sexpr_list
+              scheme_sexpr_list_of_sexpr_list
                 (List.map sexpr_of_expr' exprs))
   | ScmOr'([]) -> ScmBoolean false
   | ScmOr'([expr']) -> sexpr_of_expr' expr'
   | ScmOr'(exprs) ->
                    ScmPair (ScmSymbol "or",
-                            Reader.scheme_sexpr_list_of_sexpr_list
+                            scheme_sexpr_list_of_sexpr_list
                               (List.map sexpr_of_expr' exprs))
   | ScmVarSet' (var, expr) ->
      let var = sexpr_of_var' var in
@@ -1283,7 +1274,7 @@ let rec sexpr_of_expr' = function
      ScmPair (ScmSymbol "define", ScmPair (var, ScmPair (expr, ScmNil)))
   | ScmLambda' (params, Simple, expr) ->
      let expr = sexpr_of_expr' expr in
-     let params = Reader.scheme_sexpr_list_of_sexpr_list
+     let params = scheme_sexpr_list_of_sexpr_list
                     (List.map (fun str -> ScmSymbol str) params) in
      ScmPair (ScmSymbol "lambda",
               ScmPair (params,
@@ -1305,7 +1296,7 @@ let rec sexpr_of_expr' = function
        (ScmSymbol "lambda", ScmPair (params, ScmPair (expr, ScmNil)))
   | ScmApplic' (ScmLambda' (params, Simple, expr), args, app_kind) ->
      let ribs =
-       Reader.scheme_sexpr_list_of_sexpr_list
+       scheme_sexpr_list_of_sexpr_list
          (List.map2
             (fun param arg -> ScmPair (ScmSymbol param, ScmPair (arg, ScmNil)))
             params
@@ -1318,13 +1309,13 @@ let rec sexpr_of_expr' = function
   | ScmApplic' (proc, args, app_kind) ->
      let proc = sexpr_of_expr' proc in
      let args =
-       Reader.scheme_sexpr_list_of_sexpr_list
+       scheme_sexpr_list_of_sexpr_list
          (List.map sexpr_of_expr' args) in
      ScmPair (proc, args)
   | _ -> raise (X_syntax "Unknown form");;
 
 let string_of_expr' expr =
-  Printf.sprintf "%a" Reader.sprint_sexpr (sexpr_of_expr' expr);;
+  Printf.sprintf "%a" sprint_sexpr (sexpr_of_expr' expr);;
 
 let print_expr' chan expr =
   output_string chan
@@ -1364,9 +1355,14 @@ module type CODE_GENERATION =
   sig
     val compile_scheme_string : string -> string -> unit
     val compile_scheme_file : string -> string -> unit
+    val compile_main_no_stdlib : int -> unit
+
   end;;
 
-module Code_Generation : CODE_GENERATION= struct
+module Code_Generation : CODE_GENERATION = struct
+  open Reader;;
+  open Tag_Parser;;
+  open Semantic_Analysis;;
 
   (* areas that raise this exception are NOT for the
    * final project! please leave these unimplemented,
@@ -1399,22 +1395,41 @@ module Code_Generation : CODE_GENERATION= struct
     | [] -> []
     | s -> run (s, n, (fun s -> s));;
 
-  let remove_duplicates = raise X_not_yet_implemented;;
+  let remove_duplicates list =
+    let set_add set elem = if List.mem elem set then set else elem :: set in
+    List.rev (List.fold_left set_add [] list);;
 
-  let collect_constants = raise X_not_yet_implemented;;
+
+  let collect_constants exprs' =
+    let rec run = function
+      | ScmConst' expr' -> [expr']
+      | ScmVarGet' _ | ScmBox' _ | ScmBoxGet' _ -> []
+      | ScmOr' exprs' | ScmSeq' exprs' -> runs exprs'
+      | ScmVarSet' (_, expr') | ScmVarDef' (_, expr')
+      | ScmBoxSet' (_, expr') | ScmLambda' (_, _, expr')
+      -> run expr'
+      | ScmApplic' (expr', exprs', _) -> (run expr') @ (runs exprs')
+      | ScmIf' (test, dit, dif) -> (run test) @ (run dit) @ (run dif)
+    and runs exprs' =
+      List.fold_left
+        (fun vars expr' -> vars @ (run expr'))
+        []
+        exprs' in
+    runs exprs';;
+
 
   let add_sub_constants =
     let rec run sexpr = match sexpr with
-      | ScmVoid -> raise X_not_yet_implemented
-      | ScmNil -> raise X_not_yet_implemented
+      | ScmVoid -> [ScmVoid]
+      | ScmNil -> [ScmNil]
       | ScmBoolean _ | ScmChar _ | ScmString _ | ScmNumber _ ->
-         raise X_not_yet_implemented
-      | ScmSymbol sym -> raise X_not_yet_implemented
+         [sexpr]
+      | ScmSymbol sym -> [ScmString sym; sexpr]
       | ScmPair (car, cdr) -> (run car) @ (run cdr) @ [sexpr]
-      | ScmVector sexprs -> raise X_not_yet_implemented
+      | ScmVector sexprs -> (runs sexprs)@[sexpr]
     and runs sexprs =
-      List.fold_left (fun full sexpr -> full @ (run sexpr)) [] sexprs
-    in fun exprs' ->
+      List.fold_left (fun full sexpr -> full @ (run sexpr)) [] sexprs in
+    fun exprs' ->
        [ScmVoid; ScmNil; ScmBoolean false; ScmBoolean true; ScmChar '\000'] @ (runs exprs');;
 
   type initialized_data =
@@ -1425,7 +1440,13 @@ module Code_Generation : CODE_GENERATION= struct
     | QuadFloat of float
     | ConstPtr of int;;
 
-  let search_constant_address = raise X_not_yet_implemented;;
+  let search_constant_address value table =
+    let entry = try List.find (fun (v, _, _) -> v = value) table 
+                with Not_found ->
+                  raise (X_this_should_not_happen "constant address not found for value") in
+    let address_of = fun (_, addr, _) -> addr in
+    address_of entry;;
+
 
   let const_repr sexpr loc table = match sexpr with
     | ScmVoid -> ([RTTI "T_void"], 1)
@@ -1609,24 +1630,24 @@ module Code_Generation : CODE_GENERATION= struct
 
   let collect_free_vars =
     let rec run = function
-      | ScmConst' _ -> raise X_not_yet_implemented
+      | ScmConst' _ -> []
       | ScmVarGet' (Var' (v, Free)) -> [v]
-      | ScmVarGet' _ -> raise X_not_yet_implemented
-      | ScmIf' (test, dit, dif) -> raise X_not_yet_implemented
+      | ScmVarGet' _ -> []
+      | ScmIf' (test, dit, dif) -> (run test) @ (run dit) @ (run dif)
       | ScmSeq' exprs' -> runs exprs'
       | ScmOr' exprs' -> runs exprs'
-      | ScmVarSet' (Var' (v, Free), expr') -> raise X_not_yet_implemented
-      | ScmVarSet' (_, expr') -> raise X_not_yet_implemented
-      | ScmVarDef' (Var' (v, Free), expr') -> raise X_not_yet_implemented
+      | ScmVarSet' (Var' (v, Free), expr') -> [v]
+      | ScmVarSet' (_, expr') -> []
+      | ScmVarDef' (Var' (v, Free), expr') -> [v] @ (run expr')
       | ScmVarDef' (_, expr') -> run expr'
-      | ScmBox' (Var' (v, Free)) -> raise X_not_yet_implemented
+      | ScmBox' (Var' (v, Free)) -> [v]
       | ScmBox' _ -> []
-      | ScmBoxGet' (Var' (v, Free)) -> raise X_not_yet_implemented
+      | ScmBoxGet' (Var' (v, Free)) -> [v]
       | ScmBoxGet' _ -> []
-      | ScmBoxSet' (Var' (v, Free), expr') -> raise X_not_yet_implemented
+      | ScmBoxSet' (Var' (v, Free), expr') -> [v] @ (run expr')
       | ScmBoxSet' (_, expr') -> run expr'
-      | ScmLambda' (_, _, expr') -> raise X_not_yet_implemented
-      | ScmApplic' (expr', exprs', _) -> raise X_not_yet_implemented
+      | ScmLambda' (_, _, expr') -> run expr'
+      | ScmApplic' (expr', exprs', _) -> (run expr') @ (runs exprs')
     and runs exprs' =
       List.fold_left
         (fun vars expr' -> vars @ (run expr'))
@@ -1672,7 +1693,7 @@ module Code_Generation : CODE_GENERATION= struct
          global_bindings_table);;
   
   let asm_of_free_vars_table table =
-    let tmp = 
+    let tmp =
       List.map
         (fun (scm_var, asm_label) ->
           Printf.sprintf "%s:\t; location of %s\n\tresq 1"
@@ -1726,20 +1747,54 @@ module Code_Generation : CODE_GENERATION= struct
   let make_tc_applic_recycle_frame_done =
     make_make_label ".L_tc_recycle_frame_done";;
 
+  let make_end_user_code = make_make_label ".L_end_of_user_code";;
+
+  let make_line fmt arg = Printf.sprintf "\t%s\n" (Printf.sprintf fmt arg);;
+  let make_line_with_cmnt fmt arg cmnt = Printf.sprintf "\t%s\t; %s\n" (Printf.sprintf fmt arg) cmnt;;
+  let label_line = Printf.sprintf "%s:\n";;
+  let label_with_cmnt_line = Printf.sprintf "%s:\t; %s\n";;
+  let jump_line label = function
+    | "=" -> Printf.sprintf "\tje %s\n" label
+    | "!=" -> Printf.sprintf "\tjne %s\n" label
+    | "<" -> Printf.sprintf "\tjl %s\n" label
+    | "<=" -> Printf.sprintf "\tjle %s\n" label
+    | ">" -> Printf.sprintf "\tjg %s\n" label
+    | _ -> Printf.sprintf "\tjmp %s\n" label;;
+  let debug_line = Printf.sprintf "\t; code-gen debug: this line is auto-generated by %s\n"
+
+
   let code_gen exprs' =
     let consts = make_constants_table exprs' in
     let free_vars = make_free_vars_table exprs' in
     let rec run params env = function
-      | ScmConst' sexpr -> raise X_not_yet_implemented
+      | ScmConst' sexpr ->
+        let offset = search_constant_address sexpr consts in
+        Printf.sprintf "\tmov rax, qword %s + %d\n" label_start_of_constants_table offset
       | ScmVarGet' (Var' (v, Free)) ->
          let label = search_free_var_table v free_vars in
          Printf.sprintf
            "\tmov rax, qword [%s]\n"
            label
-      | ScmVarGet' (Var' (v, Param minor)) -> raise X_not_yet_implemented
+      | ScmVarGet' (Var' (v, Param minor)) ->
+        debug_line "ScmVarGet' (Var' (v, Param minor))" ^
+        (make_line "mov rax, PARAM(%d)" minor)
       | ScmVarGet' (Var' (v, Bound (major, minor))) ->
-         raise X_not_yet_implemented
-      | ScmIf' (test, dit, dif) -> raise X_not_yet_implemented
+        debug_line "ScmVarGet' (Var' (v, Bound (major, minor)))" ^
+        "\tmov rax, ENV\n" ^
+        (make_line "mov rax, qword [rax + 8 * %d]" major) ^
+        (make_line "mov rax, qword [rax + 8 * %d]" minor)
+      | ScmIf' (test, dit, dif) ->
+        let if_exit = make_if_end()
+        and label_else = make_if_else()
+        in
+        (run params env test) ^
+        "\tcmp rax, sob_boolean_false\n" ^
+        (jump_line label_else "=") ^
+        (run params env dit) ^
+        (jump_line if_exit "") ^
+        (label_line label_else) ^
+        (run params env dif) ^
+        (label_line if_exit)
       | ScmSeq' exprs' ->
          String.concat "\n"
            (List.map (run params env) exprs')
@@ -1765,11 +1820,23 @@ module Code_Generation : CODE_GENERATION= struct
             | None -> run params env (ScmConst' (ScmBoolean false)))
          in asm_code
       | ScmVarSet' (Var' (v, Free), expr') ->
-         raise X_not_yet_implemented
+        let addr = search_free_var_table v free_vars in
+        (debug_line "ScmVarSet' (Var' (v, Free), expr') ->") ^
+        (run params env expr') ^
+        (make_line "mov qword [%s], rax" addr) ^
+        "\tmov rax, sob_void\n"
       | ScmVarSet' (Var' (v, Param minor), expr') ->
-         raise X_not_yet_implemented
+        (debug_line "ScmVarSet' (Var' (v, Param minor), expr')") ^
+        (run params env expr') ^
+        (make_line "mov PARAM(%d), rax" minor) ^
+        "\tmov rax, sob_void\n"
       | ScmVarSet' (Var' (v, Bound (major, minor)), expr') ->
-         raise X_not_yet_implemented
+        (debug_line "ScmVarSet' (Var' (v, Bound (major, minor)), expr')") ^
+        (run params env expr') ^
+        "\tmov rbx, ENV\n" ^
+        (make_line "mov rbx, qword [rbx + 8 * %d]" major) ^
+        (make_line "mov qword [rbx + 8 * %d], rax" minor) ^
+        "\tmov rax, sob_void\n"
       | ScmVarDef' (Var' (v, Free), expr') ->
          let label = search_free_var_table v free_vars in
          (run params env expr')
@@ -1779,12 +1846,23 @@ module Code_Generation : CODE_GENERATION= struct
          raise X_not_yet_supported
       | ScmVarDef' (Var' (v, Bound (major, minor)), expr') ->
          raise X_not_yet_supported
-      | ScmBox' (Var' (v, Param minor)) -> raise X_not_yet_implemented
-      | ScmBox' _ -> raise X_not_yet_implemented
+      | ScmBox' (Var' (v, Param minor)) ->
+        (debug_line "ScmBox' (Var' (v, Param minor))") ^
+        (make_line "mov rbx, PARAM(%d)" minor) ^
+        "\tmov rdi, 8\n" ^
+        "\tcall malloc\n" ^
+        "\tmov qword [rax], rbx\n"
+      | ScmBox' _ -> raise (X_syntax "ScmBox has no variable")
       | ScmBoxGet' var' ->
          (run params env (ScmVarGet' var'))
          ^ "\tmov rax, qword [rax]\n"
-      | ScmBoxSet' (var', expr') -> raise X_not_yet_implemented
+      | ScmBoxSet' (var', expr') ->
+        (debug_line "ScmBoxSet' (var', expr')") ^
+        (run params env expr') ^
+        "\tpush rax\n" ^
+        (run params env (ScmVarGet' var')) ^
+        "\tpop qword [rax]\n" ^
+        "\tmov rax, sob_void\n"
       | ScmLambda' (params', Simple, body) ->
          let label_loop_env = make_lambda_simple_loop_env ()
          and label_loop_env_end = make_lambda_simple_loop_env_end ()
@@ -1807,7 +1885,7 @@ module Code_Generation : CODE_GENERATION= struct
          ^ "\tmov rdx, 1\n"
          ^ (Printf.sprintf "%s:\t; ext_env[i + 1] <-- env[i]\n"
               label_loop_env)
-         ^ (Printf.sprintf "\tcmp rsi, %d\n" (env + 1))
+         ^ (Printf.sprintf "\tcmp rsi, %d\n" env)
          ^ (Printf.sprintf "\tje %s\n" label_loop_env_end)
          ^ "\tmov rcx, qword [rdi + 8 * rsi]\n"
          ^ "\tmov qword [rax + 8 * rdx], rcx\n"
@@ -1845,15 +1923,182 @@ module Code_Generation : CODE_GENERATION= struct
          ^ "\tleave\n"
          ^ (Printf.sprintf "\tret 8 * (2 + %d)\n" (List.length params'))
          ^ (Printf.sprintf "%s:\t; new closure is in rax\n" label_end)
-      | ScmLambda' (params', Opt opt, body) -> raise X_not_yet_implemented
-      | ScmApplic' (proc, args, Non_Tail_Call) -> raise X_not_yet_implemented
-      | ScmApplic' (proc, args, Tail_Call) -> raise X_not_yet_implemented
+      | ScmLambda' (params', Opt opt, body) ->
+        let label_loop_env = make_lambda_opt_loop_env ()
+        and label_loop_env_end = make_lambda_opt_loop_env_end ()
+        and label_loop_params = make_lambda_opt_loop_params ()
+        and label_loop_params_end = make_lambda_opt_loop_params_end ()
+        and label_code = make_lambda_opt_code ()
+        and label_opt_arity_exact = make_lambda_opt_arity_exact ()
+        and label_opt_arity_more = make_lambda_opt_arity_more ()
+        and label_opt_stack_ok = make_lambda_opt_stack_ok ()
+        and label_opt_shrink_loop = make_lambda_opt_loop ()
+        and label_opt_enlarge_loop = make_lambda_opt_loop ()
+        and label_opt_shrink_exit = make_lambda_opt_loop_exit ()
+        and label_end = make_lambda_opt_end ()
+        and argc = List.length params'
+        in
+        "\tmov rdi, (1 + 8 + 8)\t; sob closure\n"
+        ^ "\tcall malloc\n"
+        ^ "\tpush rax\n"
+        ^ (Printf.sprintf "\tmov rdi, 8 * %d\t; new rib\n" params)
+        ^ "\tcall malloc\n"
+        ^ "\tpush rax\n"
+        ^ (Printf.sprintf "\tmov rdi, 8 * %d\t; extended env\n" (env + 1))
+        ^ "\tcall malloc\n"
+        ^ "\tmov rdi, ENV\n"
+        ^ "\tmov rsi, 0\n"
+        ^ "\tmov rdx, 1\n"
+        ^ (Printf.sprintf "%s:\t; ext_env[i + 1] <-- env[i]\n"
+              label_loop_env)
+         ^ (Printf.sprintf "\tcmp rsi, %d\n" env)
+         ^ (Printf.sprintf "\tje %s\n" label_loop_env_end)
+         ^ "\tmov rcx, qword [rdi + 8 * rsi]\n"
+         ^ "\tmov qword [rax + 8 * rdx], rcx\n"
+         ^ "\tinc rsi\n"
+         ^ "\tinc rdx\n"
+         ^ (Printf.sprintf "\tjmp %s\n" label_loop_env)
+         ^ (Printf.sprintf "%s:\n" label_loop_env_end)
+         ^ "\tpop rbx\n"
+         ^ "\tmov rsi, 0\n"
+         ^ (Printf.sprintf "%s:\t; copy params\n" label_loop_params)
+         ^ (Printf.sprintf "\tcmp rsi, %d\n" params)
+         ^ (Printf.sprintf "\tje %s\n" label_loop_params_end)
+         ^ "\tmov rdx, qword [rbp + 8 * rsi + 8 * 4]\n"
+         ^ "\tmov qword [rbx + 8 * rsi], rdx\n"
+         ^ "\tinc rsi\n"
+         ^ (Printf.sprintf "\tjmp %s\n" label_loop_params)
+         ^ (Printf.sprintf "%s:\n" label_loop_params_end)
+         ^ "\tmov qword [rax], rbx\t; ext_env[0] <-- new_rib \n"
+         ^ "\tmov rbx, rax\n"
+         ^ "\tpop rax\n"
+         ^ "\tmov byte [rax], T_closure\n"
+         ^ "\tmov SOB_CLOSURE_ENV(rax), rbx\n"
+         ^ (Printf.sprintf "\tmov SOB_CLOSURE_CODE(rax), %s\n" label_code)
+         ^ (Printf.sprintf "\tjmp %s\n" label_end)
+         ^ (Printf.sprintf "%s:\t; lambda-opt body\n" label_code) ^
+        (make_line "cmp PRE_FRAME_COUNT, %d" argc) ^
+        (jump_line label_opt_arity_exact "=") ^
+        "\tpush PRE_FRAME_COUNT\n" ^
+        (make_line "push %d" argc) ^
+        (make_line "cmp qword[rsp + 8], %d" argc) ^
+        (jump_line "L_error_incorrect_arity_opt" "<") ^
+        "\tadd rsp, 16\n" ^
+        (make_line "mov r8, PRE_FRAME_PARAM(%d)" argc) ^
+        (make_line "mov rbx, %d" (argc + 3)) ^
+        "\tmov rcx, qword [rsp + 8 * 2]\n" ^
+        "\tadd rcx, 3\n" ^
+        "\tmov rdx, sob_nil\n" ^
+        (label_line label_opt_shrink_loop) ^
+        "\tcmp rbx, rcx\n" ^
+        (jump_line label_opt_shrink_exit "=") ^
+        "\tsub rcx, 1\n" ^
+        "\tmov r9,qword[rsp + 8 * rcx]\n" ^
+        "\tlea rdi, [8 * 2 + 1]\n" ^
+        "\tcall malloc\n" ^
+        "\tmov byte [rax], T_pair\n" ^
+        "\tmov SOB_PAIR_CAR(rax), r9\n" ^
+        "\tmov SOB_PAIR_CDR(rax), rdx\n" ^
+        "\tmov rdx, rax\n" ^
+        (jump_line label_opt_shrink_loop "") ^
+        (label_line label_opt_shrink_exit) ^
+        (make_line "mov PRE_FRAME_PARAM(%d), rdx" argc) ^
+        (jump_line label_opt_stack_ok "") ^
+        (label_line label_opt_arity_exact) ^
+        "\tpop r8\n" ^
+        "\tpop r9\n" ^
+        "\tpop r10\n" ^
+        "\tadd r10, 1\n" ^
+        "\tpush sob_nil\n" ^
+        "\tpush r10\n" ^
+        "\tpush r9\n" ^
+        "\tpush r8\n" ^
+        "\tmov r8, r10\n" ^
+        "\tlea r10, PRE_FRAME_PARAM(0)\n" ^
+        (label_line label_opt_enlarge_loop) ^
+        "\tcmp r8, 1\n" ^
+        (jump_line label_opt_stack_ok "=") ^
+        "\tmov r11, qword [r10]\n" ^
+        "\tmov r12, qword [r10 + 8]\n" ^
+        "\tmov qword [r10], r12\n" ^
+        "\tmov qword [r10 + 8], r11\n" ^
+        "\tsub r8 ,1\n" ^
+        "\tadd r10 ,1\n" ^
+        (jump_line label_opt_enlarge_loop "") ^
+         (label_line label_opt_stack_ok) ^
+         "\tenter 0, 0\n"
+         ^ (run (List.length params') (env + 1) body)
+         ^ "\tleave\n" ^
+         (make_line "cmp PRE_FRAME_COUNT, %d" argc) ^
+         (jump_line label_opt_arity_more ">") ^
+         (make_line "ret 8 * %d" (argc + 3)) ^
+         (jump_line label_end "") ^
+         (label_line label_opt_arity_more) ^
+         "\tmov rbx, PRE_FRAME_COUNT\n" ^
+         "\tadd rbx, 2\n" ^
+         "\tshl rbx, 3\n" ^
+         "\tpop rcx\n" ^
+         "\tadd rsp, rbx\n" ^
+         "\tpush rcx\n" ^
+         "\tret\n" ^
+         (label_with_cmnt_line label_end "new closure is in rax")
+      | ScmApplic' (proc, args, Non_Tail_Call) ->
+        let argc = List.length args in
+        (debug_line "ScmApplic' (proc, args, Non_Tail_Call)") ^
+        (List.fold_right
+          (fun arg acc ->
+            acc ^ (run params env arg) ^ "\tpush rax\n")
+          args "") ^
+        (make_line "push %d" argc) ^
+        (run params env proc) ^
+        "\tassert_closure(rax)\n" ^
+        "\tpush SOB_CLOSURE_ENV(rax)\n" ^
+        "\tcall SOB_CLOSURE_CODE(rax)\n"
+      | ScmApplic' (proc, args, Tail_Call) ->
+        let argc = List.length args
+        and frame_override = make_tc_applic_recycle_frame_loop()
+        and frame_override_end = make_tc_applic_recycle_frame_done()
+        in
+        (debug_line "ScmApplic' (proc, args, Tail_Call)") ^
+        (label_line ".tailcall") ^
+        (List.fold_right
+          (fun arg acc ->
+            acc ^ (run params env arg) ^ "\tpush rax\n")
+          args "") ^
+        (make_line "push %d" argc) ^
+        (run params env proc) ^
+        "\tassert_closure(rax)\n" ^
+        "\tpush SOB_CLOSURE_ENV(rax)\n" ^
+        "\tpush RET_ADDR\n" ^
+        "\tpush OLD_RDP\n" ^
+        "\tmov rcx, COUNT\n" ^
+        "\tmov r8, rcx\n" ^
+        "\tadd r8, 4\n" ^
+        "\tmov r10, 0\n" ^
+        (label_line frame_override) ^
+        (make_line "cmp r10, %d" (argc + 4)) ^
+        (jump_line frame_override_end "=") ^
+        "\tadd r10, 1\n" ^
+        "\tsub r8, 1\n" ^
+        "\tlea r11, [8 * r10]\n" ^
+        "\tneg r11\n" ^
+        "\tmov r9, qword [rbp + r11]\n" ^
+        "\tmov qword [rbp + 8 * r8], r9\n" ^
+        (jump_line frame_override "") ^
+        (label_line frame_override_end) ^
+        (make_line "sub rcx, %d" argc) ^
+        "\tlea rsp, [rbp + 8 * rcx]\n" ^
+        "\tpop rbp\n" ^
+        "\tjmp SOB_CLOSURE_CODE(rax)\n"
     and runs params env exprs' =
       List.map
         (fun expr' ->
-          let code = run params env expr' in
+          let code = run params env expr'
+          and end_label = make_end_user_code ()
+          in
           let code =
             code
+            ^ (label_line end_label)
             ^ "\n\tmov rdi, rax"
             ^ "\n\tcall print_sexpr_if_not_void\n" in
           code)
@@ -1884,6 +2129,16 @@ module Code_Generation : CODE_GENERATION= struct
 
   let compile_scheme_file file_in file_out =
     compile_scheme_string file_out (file_to_string file_in);;
+
+  let compile_main_no_stdlib x =
+    let source_code = file_to_string "main-tests/main.scm" in
+    let sexprs = (PC.star Reader.nt_sexpr source_code 0).found in
+    let exprs = List.map Tag_Parser.tag_parse sexprs in
+    let exprs' = List.map Semantic_Analysis.semantics exprs in
+    let asm_code = code_gen exprs' in
+    (string_to_file "main-tests/main.asm" asm_code;
+     Printf.printf
+     "Compilation of main without standard scheme lib finished. Time to assemble!\n");;  
 
 end;; (* end of Code_Generation struct *)
 

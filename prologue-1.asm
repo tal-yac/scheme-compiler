@@ -29,6 +29,9 @@
 %define PARAM(n) 			qword [rbp + 8 * (4 + n)]
 %define AND_KILL_FRAME(n)		(8 * (2 + n))
 
+%define PRE_FRAME_COUNT                 qword [rsp + 8 * 2]
+%define PRE_FRAME_PARAM(n)              qword [rsp + 8 * (3 + n)]
+
 %macro ENTER 0
 	enter 0, 0
 	and rsp, ~15

@@ -571,6 +571,9 @@ bind_primitive:
 
 ;;; PLEASE IMPLEMENT THIS PROCEDURE
 L_code_ptr_bin_apply:
+        ENTER
+        LEAVE
+        ret
 	
 L_code_ptr_is_null:
         ENTER

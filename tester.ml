@@ -22,7 +22,7 @@ let test_tp str expected_success expected_result =
                         raise (X_test_failed (Printf.sprintf "\nString: %s\nExpected: %s\nResult: X_syntax(%s)\n" str expected_result syntax_err))
                 else
                         ()
-        | X_not_yet_implemented ->
+        | X_not_yet_implemented(err) ->
                 if expected_success then 
                         raise (X_test_failed (Printf.sprintf "\nString: %s\nExpected: %s\nResult: X_not_yet_implemented\n" str expected_result))
                 else
@@ -58,7 +58,7 @@ let test_sa str expected_success expected_result =
                         raise (X_test_failed (Printf.sprintf "\nString: %s\nResult: X_syntax(%s)\n" str syntax_err))
                 else
                         ()
-        | X_not_yet_implemented ->
+        | X_not_yet_implemented(err) ->
                 raise (X_test_failed (Printf.sprintf "\nString: %s\nResult: X_not_yet_implemented\n" str))
         | X_this_should_not_happen(happened) ->
                 raise (X_test_failed (Printf.sprintf "\nString: %s\nResult: X_this_should_not_happen(%s)\n" str happened));;

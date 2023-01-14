@@ -577,7 +577,7 @@ module Tag_Parser : TAG_PARSER = struct
     | [] -> expr
     | expr' :: exprs ->
       let remaining = macro_expand_and_clauses expr' exprs in
-      ScmPair(ScmSymbol("if") ,ScmPair(expr', ScmPair(
+      ScmPair(ScmSymbol("if") ,ScmPair(expr, ScmPair(
                                                     ScmPair(
                                                       ScmSymbol("and"),
                                                       ScmPair (remaining, ScmNil)                                  ),
@@ -586,7 +586,7 @@ module Tag_Parser : TAG_PARSER = struct
                                                       ScmNil))))
 
   let rec macro_expand_cond_ribs = function
-    | ScmNil -> ScmNil
+    | ScmNil -> ScmVoid
     | ScmPair (ScmPair (ScmSymbol "else", exprs), ribs) -> ScmPair(
                                                             ScmSymbol "begin",
                                                               exprs)
@@ -1746,6 +1746,8 @@ module Code_Generation : CODE_GENERATION = struct
     make_make_label ".L_tc_recycle_frame_loop";;
   let make_tc_applic_recycle_frame_done =
     make_make_label ".L_tc_recycle_frame_done";;
+  let make_assert_label =
+      make_make_label ".type_assert";;
 
   let make_end_user_code = make_make_label ".L_end_of_user_code";;
 
@@ -1903,7 +1905,7 @@ module Code_Generation : CODE_GENERATION = struct
          ^ "\tinc rsi\n"
          ^ (Printf.sprintf "\tjmp %s\n" label_loop_params)
          ^ (Printf.sprintf "%s:\n" label_loop_params_end)
-         ^ "\tmov qword [rax], rbx\t; ext_env[0] <-- new_rib \n"
+         ^ "\tmov qword [rax], rbx\t; ext_env[0] <-- new_rib\n"
          ^ "\tmov rbx, rax\n"
          ^ "\tpop rax\n"
          ^ "\tmov byte [rax], T_closure\n"
@@ -1993,7 +1995,7 @@ module Code_Generation : CODE_GENERATION = struct
         "\tcmp rbx, rcx\n" ^
         (jump_line label_opt_shrink_exit "=") ^
         "\tsub rcx, 1\n" ^
-        "\tmov r9,qword[rsp + 8 * rcx]\n" ^
+        "\tmov r9, qword[rsp + 8 * rcx]\n" ^
         "\tlea rdi, [8 * 2 + 1]\n" ^
         "\tcall malloc\n" ^
         "\tmov byte [rax], T_pair\n" ^
@@ -2042,8 +2044,9 @@ module Code_Generation : CODE_GENERATION = struct
          "\tpush rcx\n" ^
          "\tret\n" ^
          (label_with_cmnt_line label_end "new closure is in rax")
-      | ScmApplic' (proc, args, Non_Tail_Call) ->
+      | ScmApplic' (proc, args, _) ->
         let argc = List.length args in
+        let assert_label = make_assert_label () in
         (debug_line "ScmApplic' (proc, args, Non_Tail_Call)") ^
         (List.fold_right
           (fun arg acc ->
@@ -2051,16 +2054,16 @@ module Code_Generation : CODE_GENERATION = struct
           args "") ^
         (make_line "push %d" argc) ^
         (run params env proc) ^
+        (label_line assert_label) ^
         "\tassert_closure(rax)\n" ^
         "\tpush SOB_CLOSURE_ENV(rax)\n" ^
         "\tcall SOB_CLOSURE_CODE(rax)\n"
-      | ScmApplic' (proc, args, Tail_Call) ->
+      (* | ScmApplic' (proc, args, Tail_Call) ->
         let argc = List.length args
         and frame_override = make_tc_applic_recycle_frame_loop()
         and frame_override_end = make_tc_applic_recycle_frame_done()
         in
         (debug_line "ScmApplic' (proc, args, Tail_Call)") ^
-        (label_line ".tailcall") ^
         (List.fold_right
           (fun arg acc ->
             acc ^ (run params env arg) ^ "\tpush rax\n")
@@ -2089,7 +2092,7 @@ module Code_Generation : CODE_GENERATION = struct
         (make_line "sub rcx, %d" argc) ^
         "\tlea rsp, [rbp + 8 * rcx]\n" ^
         "\tpop rbp\n" ^
-        "\tjmp SOB_CLOSURE_CODE(rax)\n"
+        "\tjmp SOB_CLOSURE_CODE(rax)\n" *)
     and runs params env exprs' =
       List.map
         (fun expr' ->

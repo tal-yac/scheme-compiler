@@ -571,9 +571,56 @@ bind_primitive:
 
 ;;; PLEASE IMPLEMENT THIS PROCEDURE
 L_code_ptr_bin_apply:
-        ENTER
-        LEAVE
-        ret
+        enter 0, 0
+        cmp COUNT, 2
+        jne L_error_arg_count_2
+        mov rax, PARAM(0)
+        assert_closure(rax)
+        mov rbx, PARAM(1) ; cur
+        mov rcx, sob_nil ; next
+        mov rdx, sob_nil ; prev (head of list after reverse)
+.reverse_list:
+        cmp rbx, sob_nil
+        je .end_reverse
+        assert_pair(rbx)
+        mov rcx, SOB_PAIR_CDR(rbx)
+        mov SOB_PAIR_CDR(rbx), rdx
+        mov rdx, rbx
+        mov rbx, rcx
+        jmp .reverse_list
+.end_reverse:
+        mov rbx, 0 ; argc
+.push_and_count_list:
+        cmp rdx, sob_nil
+        je .end_push_and_count_list
+        add rbx, 1
+        push SOB_PAIR_CAR(rdx)
+        mov rdx, SOB_PAIR_CDR(rdx)
+        jmp .push_and_count_list
+.end_push_and_count_list:
+        push rbx
+        push SOB_CLOSURE_ENV(rax)
+        push RET_ADDR
+        push OLD_RDP
+        mov rcx, 2
+        mov r8, 4 + 2
+        lea r12, [rbx + 4]
+        mov r10, 0
+.frame_override:
+        cmp r10, r12
+        je .frame_override_end
+        add r10, 1
+        sub r8, 1
+        lea r11, [8 * r10]
+        neg r11
+        mov r9, qword [rbp + r11]
+        mov qword [rbp + 8 * r8], r9
+        jmp .frame_override
+.frame_override_end:
+        sub rcx, rbx
+        lea rsp, [rbp + 8 * rcx]
+        pop rbp
+        jmp SOB_CLOSURE_CODE(rax)
 	
 L_code_ptr_is_null:
         ENTER

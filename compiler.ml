@@ -689,7 +689,7 @@ module Code_Generation : CODE_GENERATION = struct
         "\tmov qword [r10], r12\n" ^
         "\tmov qword [r10 + 8], r11\n" ^
         "\tsub r8 ,1\n" ^
-        "\tadd r10 ,1\n" ^
+        "\tadd r10 ,8\n" ^
         (jump_line label_opt_enlarge_loop "") ^
          (label_line label_opt_stack_ok) ^
          "\tenter 0, 0\n"

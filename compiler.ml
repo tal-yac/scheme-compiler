@@ -767,7 +767,10 @@ module Code_Generation : CODE_GENERATION = struct
             code
             ^ (label_line end_label)
             ^ "\n\tmov rdi, rax"
-            ^ "\n\tcall print_sexpr_if_not_void\n" in
+            ^ "\n\tcall print_sexpr_if_not_void\n"
+            ^ "\tmov rdi, 10\n"
+            ^ "\tcall putchar\n"
+          in
           code)
         exprs' in
     let codes = runs 0 0 exprs' in

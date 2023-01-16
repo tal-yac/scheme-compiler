@@ -42,6 +42,16 @@
 %endmacro
 
 %macro assert_type 2
+        ENTER
+        push rax
+        push rdi
+        mov rdi, %1
+        call print_sexpr_if_not_void
+        mov rdi, 10
+        call putchar
+        pop rdi
+        pop rax
+        LEAVE
         cmp byte [%1], %2
         jne L_error_incorrect_type
 %endmacro

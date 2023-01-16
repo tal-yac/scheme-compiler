@@ -547,7 +547,7 @@ module Code_Generation : CODE_GENERATION = struct
          ^ (Printf.sprintf "\tmov rdi, 8 * %d\t; extended env\n" (env + 1))
          ^ "\tcall malloc\n"
          ^ "\tmov rdi, ENV\n"
-         ^ "\tmov rsi, 0\n"
+         ^ "\txor rsi, rsi\n"
          ^ "\tmov rdx, 1\n"
          ^ (Printf.sprintf "%s:\t; ext_env[i + 1] <-- env[i]\n"
               label_loop_env)
@@ -560,7 +560,7 @@ module Code_Generation : CODE_GENERATION = struct
          ^ (Printf.sprintf "\tjmp %s\n" label_loop_env)
          ^ (Printf.sprintf "%s:\n" label_loop_env_end)
          ^ "\tpop rbx\n"
-         ^ "\tmov rsi, 0\n"
+         ^ "\txor rsi, rsi\n"
          ^ (Printf.sprintf "%s:\t; copy params\n" label_loop_params)
          ^ (Printf.sprintf "\tcmp rsi, %d\n" params)
          ^ (Printf.sprintf "\tje %s\n" label_loop_params_end)
@@ -613,7 +613,7 @@ module Code_Generation : CODE_GENERATION = struct
         ^ (Printf.sprintf "\tmov rdi, 8 * %d\t; extended env\n" (env + 1))
         ^ "\tcall malloc\n"
         ^ "\tmov rdi, ENV\n"
-        ^ "\tmov rsi, 0\n"
+        ^ "\txor rsi, rsi\n"
         ^ "\tmov rdx, 1\n"
         ^ (Printf.sprintf "%s:\t; ext_env[i + 1] <-- env[i]\n"
               label_loop_env)
@@ -626,7 +626,7 @@ module Code_Generation : CODE_GENERATION = struct
          ^ (Printf.sprintf "\tjmp %s\n" label_loop_env)
          ^ (Printf.sprintf "%s:\n" label_loop_env_end)
          ^ "\tpop rbx\n"
-         ^ "\tmov rsi, 0\n"
+         ^ "\txor rsi, rsi\n"
          ^ (Printf.sprintf "%s:\t; copy params\n" label_loop_params)
          ^ (Printf.sprintf "\tcmp rsi, %d\n" params)
          ^ (Printf.sprintf "\tje %s\n" label_loop_params_end)
@@ -708,7 +708,7 @@ module Code_Generation : CODE_GENERATION = struct
          "\tpush rcx\n" ^
          "\tret\n" ^
          (label_with_cmnt_line label_end "new closure is in rax")
-      | ScmApplic' (proc, args, _) ->
+      | ScmApplic' (proc, args, Non_Tail_Call) ->
         let argc = List.length args in
         let assert_label = make_assert_label () in
         (debug_line "ScmApplic' (proc, args, Non_Tail_Call)") ^
@@ -722,7 +722,7 @@ module Code_Generation : CODE_GENERATION = struct
         "\tassert_closure(rax)\n" ^
         "\tpush SOB_CLOSURE_ENV(rax)\n" ^
         "\tcall SOB_CLOSURE_CODE(rax)\n"
-      (* | ScmApplic' (proc, args, Tail_Call) ->
+      | ScmApplic' (proc, args, Tail_Call) ->
         let argc = List.length args
         and frame_override = make_tc_applic_recycle_frame_loop()
         and frame_override_end = make_tc_applic_recycle_frame_done()
@@ -741,7 +741,7 @@ module Code_Generation : CODE_GENERATION = struct
         "\tmov rcx, COUNT\n" ^
         "\tmov r8, rcx\n" ^
         "\tadd r8, 4\n" ^
-        "\tmov r10, 0\n" ^
+        "\txor r10, r10\n" ^
         (label_line frame_override) ^
         (make_line "cmp r10, %d" (argc + 4)) ^
         (jump_line frame_override_end "=") ^
@@ -756,7 +756,7 @@ module Code_Generation : CODE_GENERATION = struct
         (make_line "sub rcx, %d" argc) ^
         "\tlea rsp, [rbp + 8 * rcx]\n" ^
         "\tpop rbp\n" ^
-        "\tjmp SOB_CLOSURE_CODE(rax)\n" *)
+        "\tjmp SOB_CLOSURE_CODE(rax)\n"
     and runs params env exprs' =
       List.map
         (fun expr' ->

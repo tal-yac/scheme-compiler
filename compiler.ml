@@ -63,7 +63,6 @@ module Code_Generation : CODE_GENERATION = struct
     let set_add set elem = if List.mem elem set then set else elem :: set in
     List.rev (List.fold_left set_add [] list);;
 
-
   let collect_constants exprs' =
     let rec run = function
       | ScmConst' expr' -> [expr']
@@ -80,7 +79,6 @@ module Code_Generation : CODE_GENERATION = struct
         []
         exprs' in
     runs exprs';;
-
 
   let add_sub_constants =
     let rec run sexpr = match sexpr with
@@ -410,8 +408,6 @@ module Code_Generation : CODE_GENERATION = struct
     make_make_label ".L_tc_recycle_frame_loop";;
   let make_tc_applic_recycle_frame_done =
     make_make_label ".L_tc_recycle_frame_done";;
-  let make_assert_label =
-      make_make_label ".type_assert";;
 
   let make_end_user_code = make_make_label ".L_end_of_user_code";;
 
@@ -551,7 +547,7 @@ module Code_Generation : CODE_GENERATION = struct
          ^ "\tmov rdx, 1\n"
          ^ (Printf.sprintf "%s:\t; ext_env[i + 1] <-- env[i]\n"
               label_loop_env)
-         ^ (Printf.sprintf "\tcmp rsi, %d\n" env)
+         ^ (Printf.sprintf "\tcmp rsi, %d\n" (env + 1))
          ^ (Printf.sprintf "\tje %s\n" label_loop_env_end)
          ^ "\tmov rcx, qword [rdi + 8 * rsi]\n"
          ^ "\tmov qword [rax + 8 * rdx], rcx\n"
@@ -617,7 +613,7 @@ module Code_Generation : CODE_GENERATION = struct
         ^ "\tmov rdx, 1\n"
         ^ (Printf.sprintf "%s:\t; ext_env[i + 1] <-- env[i]\n"
               label_loop_env)
-         ^ (Printf.sprintf "\tcmp rsi, %d\n" env)
+         ^ (Printf.sprintf "\tcmp rsi, %d\n" (env + 1))
          ^ (Printf.sprintf "\tje %s\n" label_loop_env_end)
          ^ "\tmov rcx, qword [rdi + 8 * rsi]\n"
          ^ "\tmov qword [rax + 8 * rdx], rcx\n"
@@ -680,7 +676,7 @@ module Code_Generation : CODE_GENERATION = struct
         "\tpush r9\n" ^
         "\tpush r8\n" ^
         "\tmov r8, r10\n" ^
-        "\tlea r10, PRE_FRAME_PARAM(0)\n" ^
+        "\tlea r10, [rsp + 8 * 3]\n" ^
         (label_line label_opt_enlarge_loop) ^
         "\tcmp r8, 1\n" ^
         (jump_line label_opt_stack_ok "=") ^
@@ -693,7 +689,7 @@ module Code_Generation : CODE_GENERATION = struct
         (jump_line label_opt_enlarge_loop "") ^
          (label_line label_opt_stack_ok) ^
          "\tenter 0, 0\n"
-         ^ (run (List.length params') (env + 1) body)
+         ^ (run (argc + 1) (env + 1) body)
          ^ "\tleave\n" ^
          (make_line "cmp PRE_FRAME_COUNT, %d" argc) ^
          (jump_line label_opt_arity_more ">") ^
@@ -710,7 +706,6 @@ module Code_Generation : CODE_GENERATION = struct
          (label_with_cmnt_line label_end "new closure is in rax")
       | ScmApplic' (proc, args, Non_Tail_Call) ->
         let argc = List.length args in
-        let assert_label = make_assert_label () in
         (debug_line "ScmApplic' (proc, args, Non_Tail_Call)") ^
         (List.fold_right
           (fun arg acc ->
@@ -718,7 +713,6 @@ module Code_Generation : CODE_GENERATION = struct
           args "") ^
         (make_line "push %d" argc) ^
         (run params env proc) ^
-        (label_line assert_label) ^
         "\tassert_closure(rax)\n" ^
         "\tpush SOB_CLOSURE_ENV(rax)\n" ^
         "\tcall SOB_CLOSURE_CODE(rax)\n"
@@ -767,7 +761,8 @@ module Code_Generation : CODE_GENERATION = struct
             code
             ^ (label_line end_label)
             ^ "\n\tmov rdi, rax"
-            ^ "\n\tcall print_sexpr_if_not_void\n" in
+            ^ "\n\tcall print_sexpr_if_not_void\n"
+          in
           code)
         exprs' in
     let codes = runs 0 0 exprs' in

@@ -310,22 +310,21 @@
 (define char-downcase #void)
 (define char-upcase #void)
 
-;;; TODO: currently crashes because lambda opt bug
-; (let ((delta
-;         (- (char->integer #\a)
-;           (char->integer #\A))))
-;   (set! char-downcase
-;     (lambda (ch)
-;       (if (char<=? #\A ch #\Z)
-;           (integer->char
-;             (+ (char->integer ch) delta))
-;           ch)))
-;   (set! char-upcase
-;     (lambda (ch)
-;       (if (char<=? #\a ch #\z)
-;           (integer->char
-;             (- (char->integer ch) delta))
-;           ch))))
+(let ((delta
+        (- (char->integer #\a)
+          (char->integer #\A))))
+  (set! char-downcase
+    (lambda (ch)
+      (if (char<=? #\A ch #\Z)
+          (integer->char
+            (+ (char->integer ch) delta))
+          ch)))
+  (set! char-upcase
+    (lambda (ch)
+      (if (char<=? #\a ch #\z)
+          (integer->char
+            (- (char->integer ch) delta))
+          ch))))
 
 (define char-ci<? #void)
 (define char-ci<=? #void)
